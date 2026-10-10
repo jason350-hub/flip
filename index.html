@@ -1,0 +1,2287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Flip 7 七來運轉・頂級多人互動桌遊系統</title>
+
+  <!-- Google Fonts: Outfit, Plus Jakarta Sans, Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Outfit:wght@400;600;800;900&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+  <!-- QRCode.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- PeerJS WebRTC P2P 套件 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '"Noto Sans TC"', 'system-ui', 'sans-serif'],
+            display: ['Outfit', '"Noto Sans TC"', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          },
+          colors: {
+            casino: {
+              gold: '#F59E0B',
+              amber: '#D97706',
+              emerald: '#10B981',
+              ruby: '#EF4444',
+              sapphire: '#3B82F6',
+              amethyst: '#8B5CF6',
+              dark: '#070A13',
+              card: '#0F172A',
+              border: '#1E293B'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 遊戲全域風格與視覺增強 */
+    :root {
+      --gold-glow: rgba(245, 158, 11, 0.45);
+      --emerald-glow: rgba(16, 185, 129, 0.4);
+      --ruby-glow: rgba(239, 68, 68, 0.45);
+      --sapphire-glow: rgba(59, 130, 246, 0.45);
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 15%, #131b2e 0%, #070a13 70%, #04050a 100%);
+      color: #F8FAFC;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 奢華桌布細緻網紋 */
+    .bg-table-felt {
+      background-image: 
+        radial-gradient(circle at 50% 30%, rgba(30, 58, 138, 0.18) 0%, transparent 60%),
+        radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      background-size: 100% 100%, 24px 24px;
+    }
+
+    /* 3D 卡牌翻牌效果 */
+    @keyframes cardDealFlip {
+      0% {
+        transform: perspective(900px) rotateY(-90deg) scale(0.65) translateY(40px);
+        opacity: 0;
+      }
+      70% {
+        transform: perspective(900px) rotateY(12deg) scale(1.04);
+        opacity: 1;
+      }
+      100% {
+        transform: perspective(900px) rotateY(0deg) scale(1) translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .card-3d-deal {
+      animation: cardDealFlip 0.42s cubic-bezier(0.2, 0.85, 0.32, 1.2) forwards;
+      transform-style: preserve-3d;
+      will-change: transform, opacity;
+    }
+
+    /* 全息雷射反光效果 */
+    .hologram-sheen {
+      position: relative;
+      overflow: hidden;
+    }
+    .hologram-sheen::after {
+      content: '';
+      position: absolute;
+      top: -120%;
+      left: -120%;
+      width: 340%;
+      height: 340%;
+      background: linear-gradient(
+        115deg,
+        transparent 35%,
+        rgba(255, 255, 255, 0.15) 45%,
+        rgba(251, 191, 36, 0.3) 50%,
+        rgba(147, 197, 253, 0.25) 55%,
+        transparent 65%
+      );
+      transform: rotate(25deg);
+      pointer-events: none;
+      transition: transform 0.75s ease;
+    }
+    .hologram-sheen:hover::after {
+      transform: rotate(25deg) translate(25%, 25%);
+    }
+
+    /* 聽牌與金光呼吸閃爍 */
+    @keyframes goldPulse {
+      0%, 100% {
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.3), inset 0 0 8px rgba(245, 158, 11, 0.2);
+        border-color: rgba(245, 158, 11, 0.8);
+      }
+      50% {
+        box-shadow: 0 0 34px rgba(245, 158, 11, 0.8), inset 0 0 16px rgba(245, 158, 11, 0.5);
+        border-color: rgba(251, 191, 36, 1);
+      }
+    }
+    .gold-pulse-glow {
+      animation: goldPulse 1.6s infinite ease-in-out;
+    }
+
+    /* 爆牌震動回饋 */
+    @keyframes screenBustShake {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      15% { transform: translate(-8px, -4px) rotate(-1deg); }
+      30% { transform: translate(8px, 4px) rotate(1.2deg); }
+      45% { transform: translate(-6px, 3px) rotate(-0.8deg); }
+      60% { transform: translate(5px, -3px) rotate(0.6deg); }
+      75% { transform: translate(-3px, 1px) rotate(-0.3deg); }
+      90% { transform: translate(2px, -1px) rotate(0.1deg); }
+    }
+    .bust-shake {
+      animation: screenBustShake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    /* 教室表情互動飄浮動畫 */
+    @keyframes floatUpFade {
+      0% {
+        transform: translateY(20px) scale(0.6);
+        opacity: 0;
+      }
+      20% {
+        transform: translateY(0) scale(1.2);
+        opacity: 1;
+      }
+      80% {
+        transform: translateY(-90px) scale(1);
+        opacity: 0.9;
+      }
+      100% {
+        transform: translateY(-130px) scale(0.7);
+        opacity: 0;
+      }
+    }
+    .float-reaction {
+      animation: floatUpFade 2.2s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+    }
+
+    /* 自訂平滑滑動軸 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(7, 10, 19, 0.7); }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Glassmorphism 面板 */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+    .glass-panel-elevated {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 158, 11, 0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950 overflow-x-hidden bg-table-felt">
+
+  <div id="app" class="min-h-screen flex flex-col justify-between" :class="{ 'bust-shake': isShaking }" @click="ensureAudioUnlocked">
+
+    <!-- ====================================================================== -->
+    <!-- 頂部聲音解鎖與狀態橫幅 -->
+    <!-- ====================================================================== -->
+    <div v-if="!audioUnlocked" @click.stop="unlockAudioManual" class="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-slate-950 text-xs py-2 px-4 text-center font-bold tracking-wide shadow-lg cursor-pointer flex items-center justify-center gap-2 select-none z-50">
+      <span>🔔 點擊此處解鎖立體聲合成音效，享受最震撼的翻牌對戰音場！</span>
+      <span class="bg-slate-950 text-amber-300 px-2 py-0.5 rounded-full text-[11px] font-black">啟用音效 ❯</span>
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 視圖 0：房間入口大廳 (ROOM PORTAL - 自由創建與選擇房間) -->
+    <!-- ====================================================================== -->
+    <div v-if="viewState === 'PORTAL'" class="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 max-w-xl mx-auto w-full select-none z-20">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold mb-3 tracking-widest uppercase">
+          <span>✨</span> NEXT-GEN CASINO MULTIPLAYER <span>✨</span>
+        </div>
+        <h1 class="text-4xl sm:text-5xl font-black font-display tracking-tight text-white flex items-center justify-center gap-2">
+          <span>FLIP</span>
+          <span class="bg-gradient-to-tr from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent drop-shadow-md">7</span>
+          <span class="text-xl sm:text-2xl font-bold text-slate-300 ml-1">七來運轉</span>
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 mt-2 font-medium">全班多人互動桌遊系統 • 支援手機掃描、自建選房、上限 8 組同場競技</p>
+      </div>
+
+      <!-- 入口模式切換卡片 -->
+      <div class="w-full glass-panel-elevated rounded-3xl p-6 sm:p-7 space-y-6">
+
+        <!-- 情況 A：偵測到掃碼帶入的房號 (推薦一鍵加入) -->
+        <div v-if="scannedRoomTarget" class="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-amber-900/20 to-slate-900 border border-amber-500/40 shadow-inner">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🎯</span> 掃描偵測推薦房間
+            </span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">MATCH FOUND</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-2xl font-black font-mono text-amber-300 tracking-wider">{{ scannedRoomTarget }}</div>
+              <div class="text-[11px] text-slate-400">前方黑板 / 主持人廣播之公開房號</div>
+            </div>
+            <button 
+              @click="prepareJoinRoom(scannedRoomTarget)"
+              class="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center gap-1"
+            >
+              <span>加入此房</span> ➔
+            </button>
+          </div>
+        </div>
+
+        <!-- 標籤切換：加入房間 VS 創建新房間 -->
+        <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-950/70 rounded-2xl border border-slate-800">
+          <button 
+            @click="portalTab = 'JOIN'" 
+            :class="portalTab === 'JOIN' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white font-bold'"
+            class="py-2.5 text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5"
+          >
+            <span>📱</span> 選擇/輸入房間加入
+          </button>
+          <button 
+            @click="portalTab = 'CREATE'" 
+            :class="portalTab === 'CREATE' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black shadow-md' : 'text-slate-400 hover:text-white font-bold'"
+            class="py-2.5 text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-1.5"
+          >
+            <span>✨</span> 自由創建全新房間
+          </button>
+        </div>
+
+        <!-- TAB 1: 輸入/選擇房間 -->
+        <div v-if="portalTab === 'JOIN'" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1.5">輸入或選擇房號 (Room Code)：</label>
+            <div class="relative">
+              <input 
+                v-model="inputJoinRoomCode" 
+                placeholder="例如：F7-8888 或自訂代號" 
+                class="w-full bg-slate-950/90 border border-slate-700 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-white font-mono uppercase tracking-widest focus:outline-none transition shadow-inner"
+                @keyup.enter="startJoinFlow"
+              />
+              <span class="absolute right-3.5 top-3.5 text-xs text-slate-500 font-mono">#ID</span>
+            </div>
+          </div>
+
+          <!-- 最近遊玩的歷史房間快選 -->
+          <div v-if="recentRooms.length > 0" class="pt-1">
+            <div class="text-[11px] font-bold text-slate-400 mb-1.5 flex items-center gap-1">
+              <span>🕒</span> 最近常玩歷史房間：
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button 
+                v-for="r in recentRooms" 
+                :key="r"
+                @click="inputJoinRoomCode = r"
+                class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-amber-300 transition"
+              >
+                {{ r }}
+              </button>
+            </div>
+          </div>
+
+          <button 
+            @click="startJoinFlow"
+            :disabled="!inputJoinRoomCode.trim()"
+            class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 text-slate-950 font-black text-sm rounded-xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <span>進入組別名稱設定 ➔</span>
+          </button>
+        </div>
+
+        <!-- TAB 2: 自由創建新房間 -->
+        <div v-else class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1.5">自訂房間代號（留空則自動隨機）：</label>
+            <div class="relative">
+              <input 
+                v-model="customCreateRoomCode" 
+                placeholder="例如：F7-CLASS1 或留空自動產生" 
+                class="w-full bg-slate-950/90 border border-slate-700 focus:border-sky-500 rounded-xl px-4 py-3 text-sm text-white font-mono uppercase tracking-widest focus:outline-none transition shadow-inner"
+              />
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">💡 創建後將自動生成專屬 QR Code，學生相機掃描即可秒進房間！每間上限 8 組。</p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1.5">主機設備定位：</label>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <label 
+                @click="hostDeviceRole = 'PROJECTOR'"
+                class="p-3 rounded-xl border cursor-pointer transition flex flex-col items-center justify-center text-center gap-1"
+                :class="hostDeviceRole === 'PROJECTOR' ? 'bg-sky-950/60 border-sky-500 text-sky-200' : 'bg-slate-900 border-slate-800 text-slate-400'"
+              >
+                <span class="text-xl">📽️</span>
+                <span class="font-bold">教室大螢幕主持端</span>
+                <span class="text-[10px] opacity-75">投影機/觸控黑板專用</span>
+              </label>
+
+              <label 
+                @click="hostDeviceRole = 'PORTABLE'"
+                class="p-3 rounded-xl border cursor-pointer transition flex flex-col items-center justify-center text-center gap-1"
+                :class="hostDeviceRole === 'PORTABLE' ? 'bg-amber-950/60 border-amber-500 text-amber-200' : 'bg-slate-900 border-slate-800 text-slate-400'"
+              >
+                <span class="text-xl">📱</span>
+                <span class="font-bold">手機兼房長遊玩</span>
+                <span class="text-[10px] opacity-75">房長兼第一位參賽者</span>
+              </label>
+            </div>
+          </div>
+
+          <button 
+            @click="createNewRoomHost"
+            class="w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-sm rounded-xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <span>🚀 立即創建房間並開啟對戰大廳</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- 底部單機/快速展示按鈕 -->
+      <div class="mt-6 text-center">
+        <button 
+          @click="startLocalDemoMode" 
+          class="text-xs text-slate-400 hover:text-amber-400 font-semibold underline underline-offset-4 transition"
+        >
+          無需聯網？直接開啟單機 4 組/8 組示範模式 ❯
+        </button>
+      </div>
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 視圖 0.5：手機加入確認面板 (設定暱稱與組別頭像，受 8 組上限保護) -->
+    <!-- ====================================================================== -->
+    <div v-else-if="viewState === 'MOBILE_JOIN_SETUP'" class="flex-1 flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full select-none z-20">
+      <div class="w-full glass-panel-elevated rounded-3xl p-6 sm:p-7 space-y-5">
+        <div class="text-center">
+          <div class="w-14 h-14 bg-gradient-to-br from-amber-500 to-red-500 text-white rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-xl mb-3">
+            {{ selectedAvatar }}
+          </div>
+          <h2 class="text-xl font-black text-white">準備加入遊戲</h2>
+          <div class="text-xs text-slate-400 mt-1">
+            目標房號：<span class="text-amber-400 font-mono font-black text-sm">{{ targetRoomCode }}</span>
+          </div>
+        </div>
+
+        <!-- 選擇頭像 Emoji -->
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">選擇戰隊吉祥物頭像：</label>
+          <div class="grid grid-cols-6 gap-2">
+            <button 
+              v-for="emoji in avatarOptions" 
+              :key="emoji"
+              @click="selectedAvatar = emoji"
+              class="w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all"
+              :class="selectedAvatar === emoji ? 'bg-amber-500 text-slate-950 scale-110 shadow-lg ring-2 ring-amber-300' : 'bg-slate-800/80 hover:bg-slate-700 text-white'"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 輸入組名 / 姓名 -->
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1.5">輸入小組名稱或姓名：</label>
+          <input 
+            v-model="mobileInputName" 
+            placeholder="例如：第 3 組 (猛虎隊) 或 王小明" 
+            class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition"
+            @keyup.enter="confirmJoinAsMobile"
+          />
+          
+          <!-- 快速組別代稱按鈕 -->
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <button 
+              v-for="num in 8" 
+              :key="num"
+              @click="mobileInputName = `第 ${num} 組`"
+              class="px-2 py-0.5 rounded bg-slate-800/70 hover:bg-slate-700 text-[11px] text-slate-300 font-medium transition"
+            >
+              第 {{ num }} 組
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+          <div class="flex items-center justify-between text-slate-300 font-semibold">
+            <span>🛡️ 房間限制規則：</span>
+            <span class="text-emerald-400 font-bold">每組/房間上限 8 人</span>
+          </div>
+          <p>加入後，當輪到您時手機將會即時震動與亮屏提示，可直接在手機上決定「翻牌」或「停手保分」！</p>
+        </div>
+
+        <div class="flex gap-2">
+          <button 
+            @click="viewState = 'PORTAL'" 
+            class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+          >
+            ✕ 取消
+          </button>
+          <button 
+            @click="confirmJoinAsMobile"
+            :disabled="!mobileInputName.trim() || isConnectingPeer"
+            class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 text-slate-950 font-black text-sm rounded-xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+          >
+            <span v-if="isConnectingPeer">連線中...</span>
+            <span v-else>確認加入房間 ➔</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 視圖 1：大螢幕主持端 (HOST MAIN INTERFACE) -->
+    <!-- ====================================================================== -->
+    <div v-else-if="viewState === 'HOST'" class="flex-1 flex flex-col justify-between">
+
+      <!-- 大螢幕頂部導覽列 -->
+      <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center z-30 shadow-md">
+        <div class="flex items-center gap-3">
+          <div class="bg-gradient-to-br from-amber-400 via-amber-500 to-red-500 text-slate-950 font-black text-base px-3 py-1 rounded-xl tracking-wider shadow-lg flex items-center gap-1.5">
+            <span>🃏</span> FLIP 7
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base sm:text-lg font-black tracking-wide text-white">七來運轉</h1>
+              <span class="text-[10px] font-bold text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full bg-amber-950/40">
+                多人雲端互動
+              </span>
+            </div>
+            <div class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+              <span>房號：<b class="text-amber-300 font-mono text-sm tracking-wider">{{ roomCode }}</b></span>
+              <span>|</span>
+              <span class="flex items-center gap-1">
+                <span class="inline-block w-2 h-2 rounded-full" :class="p2pStatus === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-yellow-400'"></span>
+                <span>P2P 狀態：{{ p2pStatusText }}</span>
+              </span>
+              <span>|</span>
+              <span class="text-slate-300">
+                房間人數：<b :class="players.length >= 8 ? 'text-amber-400' : 'text-emerald-400'" class="font-bold">{{ players.length }} / 8 組</b>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 頂部控制按鈕 -->
+        <div class="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
+          <!-- 放大 QR 碼按鈕 -->
+          <button 
+            @click="showBigQrModal = true"
+            class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+            title="放大 QR Code 供後排學生掃描"
+          >
+            <span>📱 放大掃碼</span>
+          </button>
+
+          <!-- 投屏聚焦 VS 全景方格模式切換 -->
+          <button 
+            @click="setMode(viewMode === 'projector' ? 'tabletop' : 'projector')"
+            class="px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shadow"
+            :class="viewMode === 'projector' ? 'bg-sky-950/70 border-sky-600 text-sky-200' : 'bg-purple-950/70 border-purple-600 text-purple-200'"
+          >
+            <span>{{ viewMode === 'projector' ? '📽️ 投屏聚焦模式' : '👥 全景 8 組方格' }}</span>
+          </button>
+
+          <!-- 音效開關 -->
+          <button 
+            @click="toggleMute"
+            :class="isMuted ? 'bg-red-950/80 border-red-700 text-red-300' : 'bg-slate-800 border-slate-700 text-emerald-300'"
+            class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition"
+          >
+            <span>{{ isMuted ? '🔇 靜音' : '🔊 音效' }}</span>
+          </button>
+
+          <!-- 規則說明 -->
+          <button 
+            @click="openModal('modal-rules')"
+            class="px-3 py-1.5 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold transition"
+          >
+            📖 規則
+          </button>
+
+          <!-- 切換/更換房間 -->
+          <button 
+            @click="confirmLeaveHostToPortal"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-red-950/80 border border-slate-700 hover:border-red-600 text-slate-300 hover:text-red-300 rounded-xl text-xs font-bold transition"
+            title="離開並回到房間選擇大廳"
+          >
+            🚪 離開房間
+          </button>
+        </div>
+      </header>
+
+      <!-- 頂部即時比分看板跑馬燈 (對戰時展示所有 8 組玩家狀態) -->
+      <div v-if="currentStatus !== 'LOBBY'" class="bg-slate-950/80 border-b border-slate-800/80 px-4 py-2 flex gap-3 overflow-x-auto select-none z-20">
+        <div 
+          v-for="(p, idx) in players" 
+          :key="p.id" 
+          class="px-3 py-1.5 rounded-2xl border flex items-center gap-2.5 min-w-[140px] flex-shrink-0 transition-all duration-300 shadow-sm"
+          :class="getScoreChipClass(p, idx)"
+        >
+          <div class="w-8 h-8 rounded-xl bg-slate-800/90 border border-slate-700 flex items-center justify-center font-bold text-sm shadow-inner" :class="idx === currentPlayerIdx ? 'text-amber-400 border-amber-500 scale-105' : 'text-slate-300'">
+            {{ p.avatar || '🎮' }}
+          </div>
+          <div class="flex flex-col text-left">
+            <div class="text-[11px] font-bold text-slate-200 flex items-center gap-1 truncate max-w-[85px]">
+              {{ p.name }}
+              <span v-if="p.hasShield" title="免死護盾生效中">🛡️</span>
+            </div>
+            <div class="text-xs font-black text-amber-400 font-mono">
+              {{ p.score }} <span class="text-[9px] font-normal text-slate-400">分</span>
+            </div>
+          </div>
+          <div class="ml-auto text-[10px] font-black">
+            <span v-if="p.status === 'busted'" class="text-red-400 px-1.5 py-0.5 rounded bg-red-950/80 border border-red-800">💥爆</span>
+            <span v-else-if="p.status === 'stayed'" class="text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800">🛑保</span>
+            <span v-else-if="idx === currentPlayerIdx" class="text-amber-300 px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-600 animate-pulse">👉輪到</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主畫面舞台區 -->
+      <main class="flex-1 flex flex-col justify-center px-4 sm:px-6 md:px-8 py-5 relative max-w-7xl mx-auto w-full z-10">
+
+        <!-- ========================================== -->
+        <!-- 階段 1：大廳連線與集結 (LOBBY - 上限 8 組名冊) -->
+        <!-- ========================================== -->
+        <section v-if="currentStatus === 'LOBBY'" class="w-full grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+          
+          <!-- 左側：學生掃碼卡片 -->
+          <div class="md:col-span-5 glass-panel-elevated p-6 rounded-3xl flex flex-col items-center justify-between text-center relative overflow-hidden">
+            <div class="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-amber-500/10 blur-3xl pointer-events-none"></div>
+
+            <div class="w-full flex flex-col items-center">
+              <div class="text-sm font-black text-amber-400 tracking-wider mb-1 flex items-center gap-1.5">
+                <span>📱</span> 手機掃碼即刻連線對決
+              </div>
+              <p class="text-xs text-slate-400 mb-3">學生相機掃描 QR Code 即可自由加入此房間，每房上限 8 組！</p>
+              
+              <!-- QR Code 容器 -->
+              <div class="p-3.5 bg-white rounded-2xl shadow-2xl inline-block mb-3.5 cursor-pointer hover:scale-105 transition" @click="showBigQrModal = true" title="點擊放大 QR Code">
+                <div id="qrcode" class="w-44 h-44 flex items-center justify-center"></div>
+              </div>
+
+              <!-- 房號醒目標示 -->
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs text-slate-400">房間代碼：</span>
+                <span class="px-3 py-1 bg-amber-950/80 border border-amber-500/50 rounded-xl text-amber-300 font-mono font-black text-lg tracking-wider">
+                  {{ roomCode }}
+                </span>
+                <button @click="showBigQrModal = true" class="p-1.5 text-xs text-slate-400 hover:text-white rounded-lg bg-slate-800" title="放大顯示">🔍</button>
+              </div>
+
+              <!-- 連線網址顯示與複製 -->
+              <div class="text-[11px] text-slate-300 font-mono bg-slate-950/90 px-3 py-1.5 rounded-xl border border-slate-800 break-all select-all w-full text-center">
+                {{ joinUrl }}
+              </div>
+              
+              <button @click="copyJoinUrl" class="mt-2 text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1">
+                📋 複製手機加入專屬連結
+              </button>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800/80 w-full text-left text-[11px] text-slate-400 space-y-1">
+              <div>💡 <b>教室小提示</b>：支援最多 8 組/人同時連線對決；若學生暫無手機，老師亦可由右側直接「+ 新增組別」在大螢幕點擊操作！</div>
+            </div>
+          </div>
+
+          <!-- 右側：已就緒組別名冊 (MAX 8 組) 與規則設定 -->
+          <div class="md:col-span-7 glass-panel-elevated p-6 rounded-3xl flex flex-col justify-between">
+            <div>
+              <div class="flex flex-wrap justify-between items-center pb-3 border-b border-slate-800/80 mb-4 gap-2">
+                <div>
+                  <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                    已就緒組別名冊
+                    <span 
+                      class="text-xs px-2.5 py-0.5 rounded-full font-mono font-bold"
+                      :class="players.length >= 8 ? 'bg-amber-950 text-amber-300 border border-amber-500' : 'bg-emerald-950 text-emerald-300 border border-emerald-600'"
+                    >
+                      {{ players.length }} / 8 組 {{ players.length >= 8 ? '(已額滿)' : '' }}
+                    </span>
+                  </h2>
+                  <div class="text-[11px] text-slate-400">目前手機連線：<b class="text-emerald-400">{{ connectedClientsCount }}</b> 台</div>
+                </div>
+
+                <div class="flex gap-3 items-center">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-slate-400 font-semibold">獲勝目標：</span>
+                    <select v-model="targetScore" class="bg-slate-900 text-xs text-amber-300 border border-slate-700 rounded-xl px-2.5 py-1.5 font-bold focus:outline-none">
+                      <option :value="100">100 分 (疾速局)</option>
+                      <option :value="150">150 分 (中等局)</option>
+                      <option :value="200">200 分 (標準局)</option>
+                      <option :value="250">250 分 (持久局)</option>
+                      <option :value="300">300 分 (高手大對決)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 8 組玩家席位網格 -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+                <div 
+                  v-for="(p, idx) in 8" 
+                  :key="idx"
+                  class="p-2.5 rounded-2xl border text-xs flex flex-col justify-between min-h-[78px] transition-all"
+                  :class="players[idx] ? (players[idx].isRemote ? 'border-emerald-600/60 bg-emerald-950/20 text-emerald-200' : 'border-slate-700 bg-slate-900/80 text-slate-200') : 'border-dashed border-slate-800 bg-slate-950/30 text-slate-600'"
+                >
+                  <div v-if="players[idx]" class="flex items-center justify-between">
+                    <span class="font-mono text-[10px] text-slate-500">#0{{ idx + 1 }}</span>
+                    <button 
+                      v-if="players.length > 2" 
+                      @click="removePlayer(idx)" 
+                      class="text-slate-500 hover:text-red-400 font-bold text-xs"
+                      title="移除組別"
+                    >✕</button>
+                  </div>
+                  <div v-else class="text-[10px] font-mono text-slate-600">席位 #0{{ idx + 1 }} (空)</div>
+
+                  <div v-if="players[idx]" class="my-auto truncate">
+                    <div class="text-xs font-bold text-white flex items-center gap-1 truncate">
+                      <span>{{ players[idx].avatar || '🎮' }}</span>
+                      <span class="truncate">{{ players[idx].name }}</span>
+                    </div>
+                    <div class="text-[10px]" :class="players[idx].isRemote ? 'text-emerald-400' : 'text-slate-400'">
+                      {{ players[idx].isRemote ? '📱 手機連線' : '🖥️ 主機代點' }}
+                    </div>
+                  </div>
+                  <div v-else class="my-auto text-[11px] text-slate-600 italic">
+                    等待加入...
+                  </div>
+                </div>
+              </div>
+
+              <!-- 手動新增組別（單機或替換） -->
+              <div class="flex gap-2">
+                <input 
+                  v-model="newPlayerName" 
+                  @keyup.enter="addPlayer"
+                  :disabled="players.length >= 8"
+                  placeholder="手動輸入組名（如：第 5 組 雄獅隊）..." 
+                  class="flex-1 bg-slate-950 border border-slate-800 disabled:opacity-50 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                />
+                <button 
+                  @click="addPlayer" 
+                  :disabled="players.length >= 8"
+                  class="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold rounded-xl border border-slate-700 text-slate-200"
+                >
+                  + 新增組別 ({{ players.length }}/8)
+                </button>
+              </div>
+            </div>
+
+            <!-- 開始按鈕 -->
+            <div class="mt-5 pt-3 border-t border-slate-800">
+              <button 
+                @click="startGame" 
+                :disabled="players.length < 2"
+                class="w-full py-4 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 text-slate-950 font-black text-lg tracking-wider rounded-2xl shadow-2xl transition active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <span>🚀 全員就緒・開始七來運轉大對決 ({{ players.length }} 組)</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 階段 2：進行中 - 視圖 1：投屏聚焦模式 (PROJECTOR MODE) -->
+        <!-- ========================================== -->
+        <section v-else-if="currentStatus === 'PLAYING' && viewMode === 'projector'" class="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          
+          <!-- 主舞台卡片 (左 8 格) -->
+          <div class="lg:col-span-8 glass-panel-elevated rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden">
+            
+            <!-- 頂部當前行動者標題 -->
+            <div class="flex justify-between items-center border-b border-slate-800/80 pb-4">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-red-500 flex items-center justify-center text-2xl shadow-lg ring-2 ring-amber-400/40">
+                  {{ activePlayer.avatar || '🎮' }}
+                </div>
+                <div>
+                  <div class="text-[11px] font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1.5">
+                    <span>ROUND {{ roundNumber }}</span>
+                    <span>•</span>
+                    <span class="animate-pulse">當前回合行動中</span>
+                  </div>
+                  <h2 class="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5 mt-0.5">
+                    {{ activePlayer.name }}
+                    <span v-if="activePlayer.hasShield" class="text-xl" title="第二次機會護盾生效中">🛡️</span>
+                    <span v-if="activePlayer.isRemote" class="text-xs px-2.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-600 rounded-full font-bold">
+                      📱 手機即時連線中
+                    </span>
+                  </h2>
+                </div>
+              </div>
+
+              <!-- Flip 7 進度寶石儀表 (1 ~ 7 相異牌) -->
+              <div class="flex flex-col items-end">
+                <div 
+                  class="px-4 py-2 rounded-2xl border flex items-center gap-2 text-xs sm:text-sm font-bold transition-all"
+                  :class="activePlayerDistinctCount >= 5 ? 'bg-amber-950/80 border-amber-500 text-amber-300 gold-pulse-glow' : 'bg-slate-900/90 border-slate-700 text-sky-300'"
+                >
+                  <span>🌟 相異牌：</span>
+                  <span class="text-xl font-black font-mono">{{ activePlayerDistinctCount }}</span> / 7
+                  <span v-if="activePlayerDistinctCount >= 6" class="text-xs text-amber-300 font-black animate-pulse">🔥 聽牌！差 1 張！</span>
+                </div>
+
+                <!-- 7 格微光進度燈 -->
+                <div class="flex gap-1.5 mt-2">
+                  <div 
+                    v-for="dot in 7" 
+                    :key="dot"
+                    class="w-3.5 h-3.5 rounded-full border transition-all duration-300"
+                    :class="dot <= activePlayerDistinctCount ? 'bg-amber-400 border-amber-300 shadow-md scale-110' : 'bg-slate-800 border-slate-700'"
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 手牌展示區 (動態立體卡牌) -->
+            <div class="my-6 min-h-[200px] flex flex-wrap gap-3 items-center justify-center p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 shadow-inner">
+              <div v-if="activePlayer.hand.length === 0" class="text-slate-500 text-sm flex items-center gap-2 font-medium">
+                <span>🃏</span> 請在下方點選「翻牌」或按下鍵盤空白鍵 (Space) 開始挑戰手氣！
+              </div>
+              
+              <!-- 卡牌本體 -->
+              <div 
+                v-for="(card, cIdx) in activePlayer.hand" 
+                :key="card.id"
+                class="w-24 sm:w-28 h-36 sm:h-40 rounded-2xl border-2 flex flex-col justify-between p-2.5 shadow-2xl transition hover:-translate-y-2 select-none card-3d-deal hologram-sheen"
+                :class="getCardStyleClass(card)"
+              >
+                <div class="flex justify-between items-center text-[11px] font-black leading-none">
+                  <span>{{ card.value !== undefined ? card.value : 'ACT' }}</span>
+                  <span class="text-[9px] opacity-75 font-mono">{{ card.rarity ? `${card.rarity}張` : '' }}</span>
+                </div>
+                
+                <div class="text-center my-auto">
+                  <div v-if="card.type === 'NUMBER'" class="text-4xl sm:text-5xl font-black font-display leading-none drop-shadow">
+                    {{ card.value }}
+                  </div>
+                  <div v-else class="text-3xl sm:text-4xl leading-none">
+                    {{ card.icon }}
+                  </div>
+                </div>
+
+                <div class="text-[10px] text-right font-bold truncate opacity-90">
+                  {{ card.title }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 操作按鈕區 (在大螢幕亦可直接代點操作) -->
+            <div class="flex gap-4 justify-center items-center pt-2">
+              <button 
+                @click="handleFlip"
+                :disabled="isProcessing || activePlayer.status !== 'active'"
+                class="flex-1 max-w-xs py-4 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-40 text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <span>🃏 翻牌 (Space)</span>
+              </button>
+              <button 
+                @click="handleStay"
+                :disabled="isProcessing || activePlayer.status !== 'active' || activePlayer.hand.length === 0"
+                class="flex-1 max-w-xs py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <span>🛑 停手保分 (S)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 右側分析與牌庫即時概況 (右 4 格) -->
+          <div class="lg:col-span-4 flex flex-col gap-5">
+            
+            <!-- 即時爆牌率分析儀表 -->
+            <div class="glass-panel-elevated rounded-3xl p-5 shadow-xl">
+              <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between mb-3">
+                <span class="flex items-center gap-1.5"><span>📊</span> 即時爆牌風險率 (Bust Risk)</span>
+                <span v-if="activePlayerBustData.shieldActive" class="text-emerald-400 font-bold">🛡️ 護盾庇護</span>
+              </div>
+
+              <div class="text-center py-2">
+                <div 
+                  class="text-5xl sm:text-6xl font-black font-display tracking-tight transition-colors duration-300"
+                  :class="activePlayerBustData.shieldActive ? 'text-emerald-400' : getBustColor(activePlayerBustData.prob)"
+                >
+                  {{ activePlayerBustData.prob }}%
+                </div>
+                <div class="text-xs text-slate-300 mt-1.5 font-bold">
+                  {{ activePlayerBustData.shieldActive ? '🛡️ 護盾保護生效中！此張 100% 絕對安全' : getBustRiskLabel(activePlayerBustData.prob) }}
+                </div>
+
+                <!-- 進度條 -->
+                <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden mt-3.5 border border-slate-800 p-0.5">
+                  <div 
+                    class="h-full rounded-full transition-all duration-500"
+                    :style="{ width: `${activePlayerBustData.prob}%` }"
+                    :class="activePlayerBustData.shieldActive ? 'bg-emerald-400' : getBustBarColor(activePlayerBustData.prob)"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- 危險點數清單 -->
+              <div class="mt-4 pt-3 border-t border-slate-800">
+                <div class="text-[11px] text-slate-400 font-semibold mb-1.5">抽中將立即重複的危險點數：</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="num in activePlayerBustData.dangerNumbers" 
+                    :key="num"
+                    class="px-2 py-0.5 rounded-lg bg-red-950/70 border border-red-700/70 text-red-300 text-xs font-mono font-bold"
+                  >
+                    點數 {{ num }} (危險!)
+                  </span>
+                  <span v-if="activePlayerBustData.dangerNumbers.length === 0" class="text-xs text-slate-500">
+                    暫無任何重複危險牌
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 牌庫即時概況與本輪累積 -->
+            <div class="glass-panel-elevated rounded-3xl p-5 shadow-xl flex-1 flex flex-col justify-between">
+              <div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+                  <span>📦</span> 牌庫狀態與本輪收益
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-center">
+                  <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 font-bold">牌庫剩餘</div>
+                    <div class="text-2xl font-black text-white font-mono mt-0.5">{{ deck.length }} 張</div>
+                  </div>
+                  <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 font-bold">本輪暫存分數</div>
+                    <div class="text-2xl font-black text-amber-400 font-mono mt-0.5">+{{ activePlayerRoundScore }} 分</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 規則小叮嚀 -->
+              <div class="mt-4 text-[11px] text-slate-400 leading-relaxed bg-slate-950/70 p-3 rounded-2xl border border-slate-800">
+                🌟 <b>Flip 7 奇蹟大滿貫</b>：湊齊 7 張相異牌立即強制作結該輪，除所有點數外獨得 <b>+15 分大獎</b>！
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 階段 2：進行中 - 視圖 2：全景 8 組方格模式 (TABLETOP GRID MODE) -->
+        <!-- ========================================== -->
+        <section v-else-if="currentStatus === 'PLAYING' && viewMode === 'tabletop'" class="w-full">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div 
+              v-for="(p, idx) in players" 
+              :key="p.id"
+              class="glass-panel rounded-2xl p-4 flex flex-col justify-between transition-all duration-300 shadow-xl border-2"
+              :class="idx === currentPlayerIdx ? 'border-amber-500 ring-2 ring-amber-500/40 bg-slate-900' : (p.status === 'busted' ? 'border-red-900/60 opacity-60' : (p.status === 'stayed' ? 'border-emerald-800/60' : 'border-slate-800'))"
+            >
+              <!-- 頂部頭銜 -->
+              <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center font-bold text-sm" :class="idx === currentPlayerIdx ? 'text-amber-400' : 'text-slate-300'">
+                    {{ p.avatar || '🎮' }}
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-white flex items-center gap-1">
+                      {{ p.name }}
+                      <span v-if="p.hasShield">🛡️</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400">總分：<b class="text-amber-400 font-mono">{{ p.score }}</b> 分</div>
+                  </div>
+                </div>
+
+                <div>
+                  <span v-if="p.status === 'busted'" class="text-[10px] px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-300 font-bold">💥爆牌</span>
+                  <span v-else-if="p.status === 'stayed'" class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold">🛑已保分</span>
+                  <span v-else-if="idx === currentPlayerIdx" class="text-[10px] px-2 py-0.5 rounded bg-amber-950 border border-amber-600 text-amber-300 font-bold animate-pulse">👉行動中</span>
+                </div>
+              </div>
+
+              <!-- 相異牌進度 -->
+              <div class="text-[11px] text-sky-400 font-semibold mb-2">
+                🌟 相異牌：{{ getDistinctCount(p) }} / 7
+              </div>
+
+              <!-- 迷你手牌展示 -->
+              <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 min-h-[90px] flex flex-wrap gap-1.5 items-center content-start">
+                <span v-if="p.hand.length === 0" class="text-[11px] text-slate-500 m-auto">尚未翻牌</span>
+                <div 
+                  v-for="c in p.hand" 
+                  :key="c.id"
+                  class="w-8 h-12 rounded-lg border flex flex-col justify-center items-center font-black font-mono shadow text-xs"
+                  :class="c.type === 'NUMBER' ? getCardStyleClass(c) : 'bg-purple-900 border-purple-600 text-amber-300'"
+                >
+                  {{ c.type === 'NUMBER' ? c.value : (c.icon || '★') }}
+                </div>
+              </div>
+
+              <!-- 底部暫存與操作 -->
+              <div class="mt-3 pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
+                <span class="text-amber-400 font-bold font-mono">
+                  暫存: +{{ calculateScore(p) }} 分
+                </span>
+                <div v-if="idx === currentPlayerIdx && p.status === 'active'" class="flex gap-1.5">
+                  <button @click="handleFlip" class="px-3 py-1 bg-sky-600 hover:bg-sky-500 rounded-lg text-xs font-bold text-white shadow">翻牌</button>
+                  <button @click="handleStay" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-bold text-white shadow">停手</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- 階段 3：總冠軍誕生 (WINNER PODIUM) -->
+        <!-- ========================================== -->
+        <section v-else-if="currentStatus === 'WINNER'" class="max-w-2xl w-full mx-auto text-center py-10 px-6 glass-panel-elevated border-2 border-amber-500 rounded-3xl shadow-2xl relative overflow-hidden">
+          <div class="text-6xl mb-3 animate-bounce">🏆</div>
+          <div class="text-xs font-black uppercase tracking-widest text-amber-400 mb-1">CHAMPION VICTORY</div>
+          <h2 class="text-3xl sm:text-4xl font-black text-white mb-2">
+            恭喜 {{ winnerPlayer?.name }} 榮登全場總冠軍！
+          </h2>
+          <p class="text-slate-300 text-sm max-w-md mx-auto mb-6">
+            以高達 <b class="text-amber-400 text-2xl font-mono">{{ winnerPlayer?.score }}</b> 分順利達成獲勝目標（{{ targetScore }} 分）！
+          </p>
+
+          <!-- 榮譽前三名榜單 -->
+          <div class="grid grid-cols-3 gap-2.5 max-w-md mx-auto mb-7 text-xs">
+            <div 
+              v-for="(p, rIdx) in rankedPlayers.slice(0, 3)" 
+              :key="p.id"
+              class="p-3 rounded-2xl border flex flex-col items-center"
+              :class="rIdx === 0 ? 'bg-amber-950/60 border-amber-500 text-amber-200' : 'bg-slate-900 border-slate-800 text-slate-300'"
+            >
+              <span class="text-xl mb-1">{{ rIdx === 0 ? '🥇' : (rIdx === 1 ? '🥈' : '🥉') }}</span>
+              <span class="font-bold truncate w-full text-center">{{ p.name }}</span>
+              <span class="font-mono text-amber-400 font-black mt-1">{{ p.score }} 分</span>
+            </div>
+          </div>
+
+          <div class="flex justify-center gap-3">
+            <button 
+              @click="resetToLobby"
+              class="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-lg transition"
+            >
+              🎉 再玩一局
+            </button>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- 教室互動表情彈幕層 (浮動飄起) -->
+      <div class="fixed inset-0 pointer-events-none z-40 overflow-hidden">
+        <div 
+          v-for="reaction in activeReactions" 
+          :key="reaction.id"
+          class="absolute bottom-16 float-reaction flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 border border-amber-500/50 shadow-2xl text-amber-300 font-bold text-sm"
+          :style="{ left: `${reaction.left}%` }"
+        >
+          <span class="text-2xl">{{ reaction.emoji }}</span>
+          <span class="text-xs text-white">{{ reaction.senderName }}</span>
+        </div>
+      </div>
+
+      <!-- 底部主持快捷操作列 -->
+      <footer class="bg-slate-950/90 border-t border-slate-800 px-6 py-2.5 flex flex-wrap justify-between items-center text-xs gap-2 select-none z-20">
+        <div class="flex items-center gap-2 text-slate-400">
+          <span>🎮 鍵盤快捷鍵：<b>Space 空白鍵</b> 翻牌 ｜ <b>S 鍵</b> 停手保分</span>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500 font-semibold">音效預覽：</span>
+          <button @click.stop="playSound('deal')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 border border-slate-700 text-[11px]">發牌</button>
+          <button @click.stop="playSound('bust')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-red-300 border border-slate-700 text-[11px]">爆牌</button>
+          <button @click.stop="playSound('flip7')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-amber-300 border border-slate-700 text-[11px]">Flip 7!</button>
+        </div>
+      </footer>
+
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 視圖 2：學生手機專屬端 (MOBILE CLIENT DISPLAY) -->
+    <!-- ====================================================================== -->
+    <div v-else-if="viewState === 'MOBILE_GAME'" class="flex-1 flex flex-col p-4 max-w-md w-full mx-auto justify-between select-none z-20">
+
+      <!-- 手機頂部狀態卡 -->
+      <div class="bg-slate-900/90 border border-slate-800 px-4 py-3 rounded-2xl flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl">
+            {{ myMobilePlayer?.avatar || '🎮' }}
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">房號：{{ targetRoomCode }}</div>
+            <div class="text-sm font-black text-white flex items-center gap-1">
+              {{ myMobilePlayer?.name }}
+              <span v-if="myMobilePlayerInfo?.hasShield">🛡️</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="text-[10px] text-slate-400 font-bold uppercase">目前累積總分</div>
+          <div class="text-xl font-black text-amber-400 font-mono">{{ myMobilePlayerInfo?.score || 0 }} <span class="text-xs">分</span></div>
+        </div>
+      </div>
+
+      <!-- 手機階段 A：等待大廳發牌 -->
+      <section v-if="mobileGameState?.status === 'LOBBY'" class="glass-panel-elevated p-6 rounded-3xl text-center space-y-4 my-auto">
+        <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <h3 class="text-xl font-black text-white">已就緒！等待主持人開局</h3>
+        <p class="text-xs text-slate-400">目前同房組別數：<b class="text-amber-400">{{ mobileGameState.playersCount || 0 }} / 8 組</b></p>
+        <div class="p-3 bg-slate-950 rounded-xl text-xs font-mono text-emerald-400 border border-slate-800">
+          🟢 連線狀態：與大螢幕同步中
+        </div>
+      </section>
+
+      <!-- 手機階段 B：遊戲對戰進行中 (PLAYING) -->
+      <section v-else-if="mobileGameState?.status === 'PLAYING'" class="space-y-4 my-auto">
+        
+        <!-- 是否輪到我的強烈指引燈 -->
+        <div 
+          class="p-4 rounded-2xl border text-center transition-all duration-300"
+          :class="isMyTurn ? 'bg-gradient-to-r from-amber-950/90 via-amber-900/60 to-amber-950/90 border-amber-500 text-amber-200 ring-4 ring-amber-500/30 animate-pulse' : 'bg-slate-900/80 border-slate-800 text-slate-400'"
+        >
+          <div v-if="isMyTurn" class="text-sm font-black tracking-wide flex items-center justify-center gap-1.5">
+            <span>👉</span> 現在輪到你行動！請在下方選擇【翻牌】或【停手】
+          </div>
+          <div v-else class="text-xs font-semibold">
+            輪到【{{ mobileGameState.currentPlayerName }}】行動中...請注意看前方大螢幕
+          </div>
+        </div>
+
+        <!-- 你的手牌陳列區 -->
+        <div class="glass-panel-elevated rounded-3xl p-4 shadow-xl">
+          <div class="flex justify-between items-center mb-3 text-xs">
+            <span class="font-bold text-slate-300">本輪手牌（暫存：<b class="text-amber-400">+{{ myMobileRoundScore }}</b> 分）</span>
+            <span class="text-sky-400 font-bold">🌟 相異牌：{{ myMobileDistinctCount }} / 7</span>
+          </div>
+
+          <div class="min-h-[140px] bg-slate-950/80 rounded-2xl p-3 border border-slate-800 flex flex-wrap gap-2 items-center justify-center">
+            <span v-if="!myMobileHand || myMobileHand.length === 0" class="text-xs text-slate-500 font-medium">
+              本輪尚未翻牌，點擊下方「翻牌」開局！
+            </span>
+            <div 
+              v-for="c in myMobileHand" 
+              :key="c.id" 
+              class="w-16 h-24 rounded-xl border-2 flex flex-col justify-between p-1.5 shadow-lg select-none card-3d-deal"
+              :class="getCardStyleClass(c)"
+            >
+              <div class="text-[10px] font-black leading-none">{{ c.value !== undefined ? c.value : 'ACT' }}</div>
+              <div class="text-center font-black font-display text-2xl leading-none">{{ c.value !== undefined ? c.value : c.icon }}</div>
+              <div class="text-[8px] text-right truncate opacity-80">{{ c.title }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作大按鈕 (FLIP & STAY) -->
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <button 
+            @click="mobileActionFlip"
+            :disabled="!isMyTurn || myMobilePlayerInfo?.status !== 'active'"
+            class="py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-40 text-white font-black text-lg rounded-2xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+          >
+            <span>🃏 翻牌 (FLIP)</span>
+          </button>
+          <button 
+            @click="mobileActionStay"
+            :disabled="!isMyTurn || myMobilePlayerInfo?.status !== 'active' || !myMobileHand || myMobileHand.length === 0"
+            class="py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 text-white font-black text-lg rounded-2xl shadow-xl transition active:scale-[0.98] flex items-center justify-center gap-1.5"
+          >
+            <span>🛑 停手 (STAY)</span>
+          </button>
+        </div>
+
+      </section>
+
+      <!-- 手機階段 C：遊戲獲勝 (WINNER) -->
+      <section v-else-if="mobileGameState?.status === 'WINNER'" class="glass-panel-elevated border-2 border-amber-500 p-6 rounded-3xl text-center space-y-4 my-auto shadow-2xl">
+        <div class="text-5xl animate-bounce">🏆</div>
+        <h3 class="text-2xl font-black text-white">對決結束！</h3>
+        <p class="text-sm text-slate-300">
+          全場總冠軍：<b class="text-amber-400 text-lg">{{ mobileGameState.winnerName }}</b>
+        </p>
+        <p class="text-xs text-slate-400">請抬頭看前方黑板大螢幕！</p>
+      </section>
+
+      <!-- 手機底部表情互動快選列 (彈幕加油) -->
+      <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[11px] text-slate-400 font-bold">送出加油彈幕：</span>
+        <div class="flex gap-2">
+          <button 
+            v-for="em in ['🔥', '😱', '👏', '💀', '🍀', '🎉']" 
+            :key="em"
+            @click="sendReaction(em)"
+            class="w-8 h-8 rounded-xl bg-slate-800/80 hover:bg-slate-700 active:scale-125 transition flex items-center justify-center text-base"
+          >
+            {{ em }}
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 彈窗 1：放大 QR Code 掃碼彈窗 (後排學生專用) -->
+    <!-- ====================================================================== -->
+    <div v-if="showBigQrModal" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-md" @click.self="showBigQrModal = false">
+      <div class="glass-panel-elevated rounded-3xl max-w-sm w-full p-6 text-center space-y-4">
+        <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+          <h3 class="text-base font-black text-amber-300 flex items-center gap-2">
+            <span>📱</span> 掃碼加入房間
+          </h3>
+          <button @click="showBigQrModal = false" class="text-slate-400 hover:text-white font-bold">✕</button>
+        </div>
+
+        <div class="p-4 bg-white rounded-2xl shadow-2xl inline-block mx-auto">
+          <div id="big-qrcode" class="w-60 h-60 flex items-center justify-center"></div>
+        </div>
+
+        <div>
+          <div class="text-xs text-slate-400">房間代碼：</div>
+          <div class="text-3xl font-black font-mono text-amber-300 tracking-wider mt-0.5">{{ roomCode }}</div>
+        </div>
+
+        <button @click="copyJoinUrl" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs text-slate-200 font-bold">
+          📋 複製完整加入連結
+        </button>
+      </div>
+    </div>
+
+    <!-- ====================================================================== -->
+    <!-- 彈窗 2：規則說明 (RULES MODAL) -->
+    <!-- ====================================================================== -->
+    <div v-if="activeModal === 'modal-rules'" class="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-md" @click.self="closeModal">
+      <div class="glass-panel-elevated rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl text-left space-y-4">
+        <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+          <h3 class="text-base font-black text-amber-300 flex items-center gap-2">
+            📖 《七來運轉 Flip 7》官方桌遊規則
+          </h3>
+          <button @click="closeModal" class="text-slate-400 hover:text-white font-bold">✕</button>
+        </div>
+
+        <div class="text-xs text-slate-300 space-y-3 max-h-[60vh] overflow-y-auto pr-1 leading-relaxed">
+          <p><strong>🎯 遊戲獲勝目標</strong>：最先累積達到目標分數（標準 200 分）的玩家或小組獲勝！最多 8 組同場對決。</p>
+          <p><strong>🎲 牌庫數字與稀有度</strong>：牌庫包含數字 0 到 12。<strong>數字是多少，牌庫裡就有幾張</strong>（例如 12 有 12 張、3 只有 3 張，0 只有 1 張）。點數越大得分越高，但重複爆牌的機率也極速暴增！</p>
+          <p><strong>💥 爆牌 (Bust)</strong>：只要翻出與面前已翻開<strong>相同點數</strong>的數字牌，立刻爆牌出局！本輪累積的所有暫存手牌作廢，以 0 分收場！</p>
+          <p><strong>🌟 Flip 7 奇蹟大滿貫</strong>：若玩家面前成功收集到 <strong>7 張完全不重複的相異牌</strong>，該輪直接強制終止，該玩家除獲得所有卡牌點數總和外，額外獨得 <strong>+15 分大獎</strong>！</p>
+          <p><strong>✨ 特殊功能牌說明</strong>：
+            <br>• 🛡️ <strong>第二次機會 (Second Chance)</strong>：免死金牌，發生重複數字爆牌時自動抵銷一次。
+            <br>• ⚡ <strong>連翻三張 (Flip Three)</strong>：強制一口氣連續翻開 3 張牌！
+            <br>• ❄️ <strong>急凍凍結 (Freeze)</strong>：強制當前玩家立即停手保分，安全下莊。
+            <br>• 🌟 <strong>幸運萬能星 (Wild)</strong>：永不重複爆牌，直接算作一張獨立相異牌並獲 +5 分！
+            <br>• ➕ <strong>加乘卡 (+2/+4/+6/x2)</strong>：結算時額外增加點數或將整輪得分翻倍！
+          </p>
+        </div>
+
+        <div class="flex justify-end pt-2 border-t border-slate-800">
+          <button @click="closeModal" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg">
+            我明白了
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- 核心邏輯腳本 (Vue 3 + WebRTC PeerJS + Web Audio API) -->
+  <!-- ====================================================================== -->
+  <script>
+    const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
+
+    const CARD_TYPES = {
+      NUMBER: 'NUMBER',
+      SECOND_CHANCE: 'SECOND_CHANCE',
+      FLIP_THREE: 'FLIP_THREE',
+      FREEZE: 'FREEZE',
+      MODIFIER: 'MODIFIER',
+      WILD: 'WILD'
+    };
+
+    createApp({
+      setup() {
+        // ----------------------------------------------------
+        // 1. 視圖與房間狀態
+        // ----------------------------------------------------
+        // viewState: 'PORTAL' | 'MOBILE_JOIN_SETUP' | 'HOST' | 'MOBILE_GAME'
+        const viewState = ref("PORTAL");
+        const portalTab = ref("JOIN"); // 'JOIN' | 'CREATE'
+        const hostDeviceRole = ref("PROJECTOR"); // 'PROJECTOR' | 'PORTABLE'
+
+        // 檢查網址參數是否有掃碼帶入的房間代號
+        const urlParams = new URLSearchParams(window.location.search);
+        const hashMatch = window.location.hash.match(/room=([^&]+)/);
+        const urlRoom = urlParams.get('room') || (hashMatch ? hashMatch[1] : null);
+
+        const scannedRoomTarget = ref(urlRoom ? urlRoom.trim().toUpperCase() : "");
+        const targetRoomCode = ref(scannedRoomTarget.value || "");
+        const inputJoinRoomCode = ref(scannedRoomTarget.value || "");
+        const customCreateRoomCode = ref("");
+
+        // 歷史遊玩紀錄
+        const recentRooms = ref(JSON.parse(localStorage.getItem('f7_recent_rooms') || '[]'));
+        const saveRecentRoom = (code) => {
+          if (!code) return;
+          const set = new Set([code, ...recentRooms.value]);
+          recentRooms.value = Array.from(set).slice(0, 5);
+          localStorage.setItem('f7_recent_rooms', JSON.stringify(recentRooms.value));
+        };
+
+        // 房號設定 (Host)
+        const roomCode = ref("F7-" + Math.floor(1000 + Math.random() * 9000));
+        const showBigQrModal = ref(false);
+
+        // 手機端玩家自訂
+        const mobileInputName = ref("");
+        const selectedAvatar = ref("🦁");
+        const avatarOptions = ["🦁", "🐯", "🦅", "🐉", "🦊", "🐼", "⚡", "🚀", "👑", "🎯", "💎", "🎲"];
+        const isConnectingPeer = ref(false);
+
+        // 遊戲主狀態 (HOST)
+        const currentStatus = ref("LOBBY"); // 'LOBBY' | 'PLAYING' | 'WINNER'
+        const viewMode = ref("projector"); // 'projector' | 'tabletop'
+        const targetScore = ref(200);
+        const roundNumber = ref(1);
+        const currentPlayerIdx = ref(0);
+        const isProcessing = ref(false);
+        const isShaking = ref(false);
+        const isMuted = ref(false);
+        const activeModal = ref(null);
+
+        // 玩家名單 (最多 8 組)
+        const players = ref([
+          { id: "p1", name: "第 1 組 (猛虎隊)", avatar: "🐯", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+          { id: "p2", name: "第 2 組 (巨龍隊)", avatar: "🐉", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+          { id: "p3", name: "第 3 組 (獵鷹隊)", avatar: "🦅", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+          { id: "p4", name: "第 4 組 (狂獅隊)", avatar: "🦁", score: 0, hand: [], hasShield: false, status: "active", isRemote: false }
+        ]);
+        const newPlayerName = ref("");
+
+        // 牌庫
+        const deck = ref([]);
+
+        // 手機端專屬狀態
+        const myMobilePlayer = ref(null);
+        const mobileGameState = ref(null);
+
+        // 教室即時表情互動
+        const activeReactions = ref([]);
+
+        // ----------------------------------------------------
+        // 2. 基礎計算屬性
+        // ----------------------------------------------------
+        const activePlayer = computed(() => players.value[currentPlayerIdx.value] || players.value[0]);
+
+        const getDistinctCount = (player) => {
+          if (!player || !player.hand) return 0;
+          const set = new Set();
+          let wildCount = 0;
+          player.hand.forEach(c => {
+            if (c.type === CARD_TYPES.NUMBER) set.add(c.value);
+            if (c.type === CARD_TYPES.WILD) wildCount++;
+          });
+          return set.size + wildCount;
+        };
+
+        const activePlayerDistinctCount = computed(() => getDistinctCount(activePlayer.value));
+
+        const calculateScore = (player) => {
+          if (!player || !player.hand) return 0;
+          let sum = 0;
+          let mul = 1;
+          player.hand.forEach(c => {
+            if (c.type === CARD_TYPES.NUMBER) sum += c.value;
+            else if (c.type === CARD_TYPES.WILD) sum += 5;
+            else if (c.type === CARD_TYPES.MODIFIER) {
+              if (c.val === 'x2') mul *= 2;
+              else sum += Number(c.val);
+            }
+          });
+          return sum * mul;
+        };
+
+        const activePlayerRoundScore = computed(() => calculateScore(activePlayer.value));
+
+        // 即時爆牌機率計算
+        const calculateBustProbability = (player) => {
+          if (!player) return { prob: 0, dangerNumbers: [], shieldActive: false };
+          if (player.hasShield) {
+            return { prob: 0, dangerNumbers: [], shieldActive: true };
+          }
+          const playerNums = new Set();
+          player.hand.forEach(c => {
+            if (c.type === CARD_TYPES.NUMBER) playerNums.add(c.value);
+          });
+
+          if (playerNums.size === 0 || deck.value.length === 0) {
+            return { prob: 0, dangerNumbers: [], shieldActive: false };
+          }
+
+          let dangerCount = 0;
+          deck.value.forEach(c => {
+            if (c.type === CARD_TYPES.NUMBER && playerNums.has(c.value)) dangerCount++;
+          });
+
+          const p = Math.round((dangerCount / deck.value.length) * 100);
+          return {
+            prob: p,
+            dangerNumbers: Array.from(playerNums).sort((a,b) => a-b),
+            shieldActive: false
+          };
+        };
+
+        const activePlayerBustData = computed(() => calculateBustProbability(activePlayer.value));
+
+        const rankedPlayers = computed(() => {
+          return [...players.value].sort((a,b) => b.score - a.score);
+        });
+
+        // 手機專用計算屬性
+        const myMobilePlayerInfo = computed(() => {
+          if (!myMobilePlayer.value || !mobileGameState.value || !mobileGameState.value.players) return null;
+          return mobileGameState.value.players.find(p => p.id === myMobilePlayer.value.id) || null;
+        });
+
+        const myMobileHand = computed(() => myMobilePlayerInfo.value?.hand || []);
+        const myMobileDistinctCount = computed(() => getDistinctCount(myMobilePlayerInfo.value));
+        const myMobileRoundScore = computed(() => calculateScore(myMobilePlayerInfo.value));
+
+        const isMyTurn = computed(() => {
+          if (!myMobilePlayer.value || !mobileGameState.value) return false;
+          return mobileGameState.value.currentPlayerId === myMobilePlayer.value.id;
+        });
+
+        // ----------------------------------------------------
+        // 3. 連線網址與 QR Code 生成
+        // ----------------------------------------------------
+        const joinUrl = computed(() => {
+          const origin = window.location.origin;
+          const path = window.location.pathname;
+          const base = (window.location.protocol === 'file:') ? "https://github.com/flip7" : `${origin}${path}`;
+          return `${base}#room=${roomCode.value}`;
+        });
+
+        const copyJoinUrl = () => {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(joinUrl.value).then(() => {
+              alert("✓ 已成功複製加入連結：" + joinUrl.value);
+            }).catch(() => {
+              promptFallbackCopy();
+            });
+          } else {
+            promptFallbackCopy();
+          }
+        };
+
+        const promptFallbackCopy = () => {
+          const el = document.createElement('textarea');
+          el.value = joinUrl.value;
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand('copy');
+          document.body.removeChild(el);
+          alert("✓ 已成功複製加入連結：" + joinUrl.value);
+        };
+
+        const renderQR = () => {
+          nextTick(() => {
+            ['qrcode', 'big-qrcode'].forEach(id => {
+              const el = document.getElementById(id);
+              if (!el) return;
+              el.innerHTML = "";
+              const size = (id === 'big-qrcode') ? 240 : 175;
+              try {
+                if (window.QRCode) {
+                  new QRCode(el, {
+                    text: joinUrl.value,
+                    width: size,
+                    height: size,
+                    colorDark: "#070A13",
+                    colorLight: "#FFFFFF",
+                    correctLevel: QRCode.CorrectLevel.M
+                  });
+                } else {
+                  el.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(joinUrl.value)}" alt="QR Code" class="w-full h-full rounded" />`;
+                }
+              } catch (e) {
+                el.innerHTML = `<div class="text-xs text-slate-800 p-2 font-mono">房號：${roomCode.value}</div>`;
+              }
+            });
+          });
+        };
+
+        watch(showBigQrModal, (val) => {
+          if (val) renderQR();
+        });
+
+        // ----------------------------------------------------
+        // 4. 牌庫建立與洗牌演算法
+        // ----------------------------------------------------
+        const createFreshDeck = () => {
+          const cards = [];
+          let uid = 1;
+
+          // 1. 標準數字牌 0 ~ 12 (0 有 1 張，其餘數字是多少就有幾張)
+          for (let n = 0; n <= 12; n++) {
+            const count = n === 0 ? 1 : n;
+            for (let c = 0; c < count; c++) {
+              cards.push({
+                id: `c_${uid++}`,
+                type: CARD_TYPES.NUMBER,
+                value: n,
+                rarity: count,
+                title: `${n} 點`
+              });
+            }
+          }
+
+          // 2. 特殊功能牌
+          for (let i = 0; i < 3; i++) {
+            cards.push({ id: `s_${uid++}`, type: CARD_TYPES.SECOND_CHANCE, title: '第二次機會', icon: '🛡️' });
+          }
+          for (let i = 0; i < 3; i++) {
+            cards.push({ id: `f_${uid++}`, type: CARD_TYPES.FLIP_THREE, title: '連翻三張', icon: '⚡' });
+          }
+          for (let i = 0; i < 2; i++) {
+            cards.push({ id: `z_${uid++}`, type: CARD_TYPES.FREEZE, title: '急凍凍結', icon: '❄️' });
+          }
+          for (let i = 0; i < 2; i++) {
+            cards.push({ id: `w_${uid++}`, type: CARD_TYPES.WILD, title: '幸運萬能星', icon: '🌟' });
+          }
+          [{val: 2, t: '+2'}, {val: 4, t: '+4'}, {val: 6, t: '+6'}, {val: 'x2', t: 'x2'}].forEach(m => {
+            cards.push({ id: `m_${uid++}`, type: CARD_TYPES.MODIFIER, val: m.val, title: `加成 ${m.t}`, icon: '➕' });
+          });
+
+          // Fisher-Yates 洗牌
+          for (let i = cards.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [cards[i], cards[j]] = [cards[j], cards[i]];
+          }
+          return cards;
+        };
+
+        // ----------------------------------------------------
+        // 5. PeerJS WebRTC P2P 多人連線核心
+        // ----------------------------------------------------
+        let peer = null;
+        const p2pStatus = ref("STANDBY");
+        const p2pStatusText = ref("等待啟動...");
+        const remoteConnections = ref([]);
+        const connectedClientsCount = computed(() => remoteConnections.value.length);
+        let mobileHostConn = null;
+
+        const broadcastState = () => {
+          if (viewState.value !== 'HOST' || remoteConnections.value.length === 0) return;
+          const payload = {
+            type: "STATE_SYNC",
+            status: currentStatus.value,
+            roundNumber: roundNumber.value,
+            currentPlayerId: activePlayer.value ? activePlayer.value.id : "",
+            currentPlayerName: activePlayer.value ? activePlayer.value.name : "",
+            targetScore: targetScore.value,
+            winnerName: winnerPlayer.value ? winnerPlayer.value.name : "",
+            deckLength: deck.value.length,
+            playersCount: players.value.length,
+            players: players.value.map(p => ({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar,
+              score: p.score,
+              hand: p.hand,
+              hasShield: p.hasShield,
+              status: p.status
+            }))
+          };
+
+          remoteConnections.value.forEach(conn => {
+            if (conn.open) {
+              try { conn.send(payload); } catch(e) {}
+            }
+          });
+        };
+
+        // Host 端初始化
+        const initHostPeer = () => {
+          if (!window.Peer) {
+            p2pStatus.value = "FALLBACK";
+            p2pStatusText.value = "離線單機模式";
+            return;
+          }
+
+          if (peer) peer.destroy();
+
+          p2pStatus.value = "CONNECTING";
+          p2pStatusText.value = "雲端建立中...";
+
+          const hostPeerId = "FLIP7_ROOM_" + roomCode.value.replace(/[^a-zA-Z0-9]/g, "");
+          peer = new Peer(hostPeerId);
+
+          peer.on('open', () => {
+            p2pStatus.value = "CONNECTED";
+            p2pStatusText.value = "已就緒可供掃碼";
+            saveRecentRoom(roomCode.value);
+            renderQR();
+          });
+
+          peer.on('connection', (conn) => {
+            conn.on('open', () => {
+              remoteConnections.value.push(conn);
+              broadcastState();
+            });
+
+            conn.on('data', (data) => {
+              handleHostReceivedData(conn, data);
+            });
+
+            conn.on('close', () => {
+              remoteConnections.value = remoteConnections.value.filter(c => c !== conn);
+              broadcastState();
+            });
+          });
+
+          peer.on('error', (err) => {
+            p2pStatus.value = "FALLBACK";
+            p2pStatusText.value = "單機模式";
+          });
+        };
+
+        const handleHostReceivedData = (conn, data) => {
+          if (!data || !data.type) return;
+
+          if (data.type === 'JOIN_PLAYER') {
+            // 檢查是否超過 8 人
+            const existing = players.value.find(p => p.id === conn.peer);
+            if (!existing) {
+              if (players.value.length >= 8) {
+                conn.send({ type: 'JOIN_REJECTED', reason: 'ROOM_FULL', max: 8 });
+                return;
+              }
+              players.value.push({
+                id: conn.peer,
+                name: data.name,
+                avatar: data.avatar || "🎮",
+                score: 0,
+                hand: [],
+                hasShield: false,
+                status: 'active',
+                isRemote: true
+              });
+            } else {
+              existing.name = data.name;
+              existing.avatar = data.avatar || existing.avatar;
+            }
+            conn.send({ type: 'JOIN_CONFIRMED', playerId: conn.peer, name: data.name });
+            broadcastState();
+            playSound('safe');
+          } else if (data.type === 'ACTION_FLIP') {
+            if (activePlayer.value && activePlayer.value.id === conn.peer) {
+              handleFlip();
+            }
+          } else if (data.type === 'ACTION_STAY') {
+            if (activePlayer.value && activePlayer.value.id === conn.peer) {
+              handleStay();
+            }
+          } else if (data.type === 'REACTION_EMOJI') {
+            broadcastReaction(data.emoji, data.senderName);
+          }
+        };
+
+        const broadcastReaction = (emoji, senderName) => {
+          const reaction = {
+            id: Date.now() + Math.random(),
+            emoji,
+            senderName,
+            left: 10 + Math.random() * 80
+          };
+          activeReactions.value.push(reaction);
+          playSound('safe');
+          setTimeout(() => {
+            activeReactions.value = activeReactions.value.filter(r => r.id !== reaction.id);
+          }, 2400);
+
+          // 轉發給所有手機端
+          remoteConnections.value.forEach(conn => {
+            if (conn.open) {
+              try { conn.send({ type: 'REACTION_BROADCAST', emoji, senderName }); } catch(e) {}
+            }
+          });
+        };
+
+        // Mobile 端連線 Host
+        const connectToHostPeer = (code, playerName, avatar) => {
+          if (!window.Peer) {
+            alert("瀏覽器無法載入 PeerJS 套件，請確認網路！");
+            isConnectingPeer.value = false;
+            return;
+          }
+
+          if (peer) peer.destroy();
+
+          peer = new Peer();
+          peer.on('open', (id) => {
+            const hostPeerId = "FLIP7_ROOM_" + code.replace(/[^a-zA-Z0-9]/g, "");
+            mobileHostConn = peer.connect(hostPeerId, { reliable: true });
+
+            mobileHostConn.on('open', () => {
+              mobileHostConn.send({
+                type: 'JOIN_PLAYER',
+                name: playerName,
+                avatar: avatar
+              });
+            });
+
+            mobileHostConn.on('data', (data) => {
+              if (data.type === 'JOIN_CONFIRMED') {
+                myMobilePlayer.value = { id: data.playerId, name: data.name, avatar };
+                viewState.value = 'MOBILE_GAME';
+                isConnectingPeer.value = false;
+                saveRecentRoom(code);
+                playSound('safe');
+              } else if (data.type === 'JOIN_REJECTED') {
+                isConnectingPeer.value = false;
+                if (data.reason === 'ROOM_FULL') {
+                  alert(`⚠️ 抱歉！房號【${code}】目前已達人數上限 (${data.max}/8 人)！\n請選擇其他房間或自己創建新房間！`);
+                } else {
+                  alert(`⚠️ 無法加入房間：${data.reason}`);
+                }
+              } else if (data.type === 'STATE_SYNC') {
+                mobileGameState.value = data;
+              } else if (data.type === 'REACTION_BROADCAST') {
+                playSound('deal');
+              }
+            });
+
+            mobileHostConn.on('error', () => {
+              isConnectingPeer.value = false;
+              alert(`無法連線至房號【${code}】，請確認房號是否正確且主持端已開啟！`);
+            });
+          });
+
+          peer.on('error', () => {
+            isConnectingPeer.value = false;
+            alert(`P2P 伺服器連線失敗，請檢查網路連線！`);
+          });
+        };
+
+        // ----------------------------------------------------
+        // 6. 房間流向與導航事件
+        // ----------------------------------------------------
+        const prepareJoinRoom = (code) => {
+          targetRoomCode.value = code;
+          viewState.value = 'MOBILE_JOIN_SETUP';
+        };
+
+        const startJoinFlow = () => {
+          const code = inputJoinRoomCode.value.trim().toUpperCase();
+          if (!code) return;
+          prepareJoinRoom(code);
+        };
+
+        const confirmJoinAsMobile = () => {
+          const name = mobileInputName.value.trim();
+          if (!name) return;
+          isConnectingPeer.value = true;
+          connectToHostPeer(targetRoomCode.value, name, selectedAvatar.value);
+        };
+
+        const createNewRoomHost = () => {
+          let code = customCreateRoomCode.value.trim().toUpperCase();
+          if (!code) {
+            code = "F7-" + Math.floor(1000 + Math.random() * 9000);
+          }
+          roomCode.value = code;
+          viewState.value = 'HOST';
+          
+          if (hostDeviceRole.value === 'PORTABLE') {
+            players.value = [
+              { id: "host_p1", name: "房長 (我)", avatar: "👑", score: 0, hand: [], hasShield: false, status: "active", isRemote: false }
+            ];
+          } else {
+            players.value = [
+              { id: "p1", name: "第 1 組 (猛虎隊)", avatar: "🐯", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+              { id: "p2", name: "第 2 組 (巨龍隊)", avatar: "🐉", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+              { id: "p3", name: "第 3 組 (獵鷹隊)", avatar: "🦅", score: 0, hand: [], hasShield: false, status: "active", isRemote: false },
+              { id: "p4", name: "第 4 組 (狂獅隊)", avatar: "🦁", score: 0, hand: [], hasShield: false, status: "active", isRemote: false }
+            ];
+          }
+          
+          initHostPeer();
+        };
+
+        const startLocalDemoMode = () => {
+          roomCode.value = "F7-DEMO";
+          viewState.value = 'HOST';
+          currentStatus.value = 'LOBBY';
+          renderQR();
+        };
+
+        const confirmLeaveHostToPortal = () => {
+          if (confirm("確定要離開目前房間並返回房間大廳嗎？")) {
+            if (peer) peer.destroy();
+            viewState.value = 'PORTAL';
+          }
+        };
+
+        // ----------------------------------------------------
+        // 7. 手機端使用者操作
+        // ----------------------------------------------------
+        const mobileActionFlip = () => {
+          if (mobileHostConn && isMyTurn.value) {
+            mobileHostConn.send({ type: 'ACTION_FLIP' });
+          }
+        };
+
+        const mobileActionStay = () => {
+          if (mobileHostConn && isMyTurn.value) {
+            mobileHostConn.send({ type: 'ACTION_STAY' });
+          }
+        };
+
+        const sendReaction = (emoji) => {
+          if (mobileHostConn) {
+            mobileHostConn.send({
+              type: 'REACTION_EMOJI',
+              emoji,
+              senderName: myMobilePlayer.value?.name || '隊員'
+            });
+          }
+        };
+
+        // ----------------------------------------------------
+        // 8. 遊戲核心邏輯 (FLIP, STAY, BUST, FLIP 7)
+        // ----------------------------------------------------
+        const startGame = () => {
+          deck.value = createFreshDeck();
+          roundNumber.value = 1;
+          currentPlayerIdx.value = 0;
+          players.value.forEach(p => {
+            p.score = 0;
+            p.hand = [];
+            p.hasShield = false;
+            p.status = 'active';
+          });
+          currentStatus.value = 'PLAYING';
+          broadcastState();
+          playSound('safe');
+        };
+
+        const triggerScreenShake = () => {
+          isShaking.value = true;
+          setTimeout(() => { isShaking.value = false; }, 550);
+        };
+
+        const handleFlip = () => {
+          if (isProcessing.value || activePlayer.value.status !== 'active') return;
+          if (deck.value.length === 0) {
+            deck.value = createFreshDeck();
+          }
+
+          isProcessing.value = true;
+          playSound('deal');
+
+          const card = deck.value.pop();
+          executeCardDraw(activePlayer.value, card, () => {
+            isProcessing.value = false;
+            broadcastState();
+          });
+        };
+
+        const executeCardDraw = (player, card, onComplete) => {
+          if (card.type === CARD_TYPES.NUMBER) {
+            const hasDuplicate = player.hand.some(c => c.type === CARD_TYPES.NUMBER && c.value === card.value);
+
+            if (hasDuplicate) {
+              if (player.hasShield) {
+                player.hasShield = false;
+                player.hand.push(card);
+                playSound('shield');
+                alert(`🛡️ 護盾生效！成功抵消點數 [${card.value}] 的爆牌危險！`);
+                onComplete();
+              } else {
+                playSound('bust');
+                triggerScreenShake();
+                player.status = 'busted';
+                player.hand.push(card);
+                setTimeout(() => {
+                  advanceTurn();
+                  onComplete();
+                }, 1000);
+                return;
+              }
+            } else {
+              playSound('safe');
+              player.hand.push(card);
+              // 檢查 FLIP 7 奇蹟大滿貫！
+              if (getDistinctCount(player) >= 7) {
+                playSound('flip7');
+                if (window.confetti) window.confetti({ particleCount: 180, spread: 90 });
+                const earned = calculateScore(player) + 15;
+                player.score += earned;
+                player.status = 'stayed';
+                alert(`🌟 奇蹟 FLIP 7！${player.name} 集齊 7 張完全相異牌！額外獨得 +15 分大獎！`);
+                setTimeout(() => {
+                  endRoundDueToFlip7();
+                  onComplete();
+                }, 1200);
+                return;
+              }
+              onComplete();
+            }
+          } else if (card.type === CARD_TYPES.SECOND_CHANCE) {
+            playSound('shield');
+            if (player.hasShield) {
+              const recipient = players.value.find(p => p.id !== player.id && !p.hasShield && p.status === 'active');
+              if (recipient) recipient.hasShield = true;
+            } else {
+              player.hasShield = true;
+            }
+            player.hand.push(card);
+            onComplete();
+          } else if (card.type === CARD_TYPES.FLIP_THREE) {
+            player.hand.push(card);
+            let drawsLeft = 3;
+            const doNext = () => {
+              if (drawsLeft <= 0 || player.status !== 'active') {
+                onComplete();
+                return;
+              }
+              drawsLeft--;
+              setTimeout(() => {
+                if (deck.value.length === 0) deck.value = createFreshDeck();
+                const nextCard = deck.value.pop();
+                playSound('deal');
+                executeCardDraw(player, nextCard, doNext);
+              }, 700);
+            };
+            doNext();
+          } else if (card.type === CARD_TYPES.FREEZE) {
+            playSound('safe');
+            player.hand.push(card);
+            handleStay();
+            onComplete();
+          } else if (card.type === CARD_TYPES.WILD) {
+            playSound('flip7');
+            player.hand.push(card);
+            if (getDistinctCount(player) >= 7) {
+              if (window.confetti) window.confetti({ particleCount: 180, spread: 90 });
+              const earned = calculateScore(player) + 15;
+              player.score += earned;
+              player.status = 'stayed';
+              alert(`🌟 奇蹟 FLIP 7！${player.name} 集齊 7 張相異牌！額外獨得 +15 分大獎！`);
+              setTimeout(() => {
+                endRoundDueToFlip7();
+                onComplete();
+              }, 1200);
+              return;
+            }
+            onComplete();
+          } else if (card.type === CARD_TYPES.MODIFIER) {
+            playSound('safe');
+            player.hand.push(card);
+            onComplete();
+          }
+        };
+
+        const handleStay = () => {
+          if (isProcessing.value || activePlayer.value.status !== 'active') return;
+          playSound('stay');
+          const pts = calculateScore(activePlayer.value);
+          activePlayer.value.score += pts;
+          activePlayer.value.status = 'stayed';
+          advanceTurn();
+          broadcastState();
+        };
+
+        const advanceTurn = () => {
+          const allDone = players.value.every(p => p.status !== 'active');
+          if (allDone) {
+            endRound();
+            return;
+          }
+          let nextIdx = (currentPlayerIdx.value + 1) % players.value.length;
+          while (players.value[nextIdx].status !== 'active') {
+            nextIdx = (nextIdx + 1) % players.value.length;
+          }
+          currentPlayerIdx.value = nextIdx;
+        };
+
+        const endRoundDueToFlip7 = () => {
+          players.value.forEach(p => {
+            if (p.status === 'active') {
+              p.score += calculateScore(p);
+              p.status = 'stayed';
+            }
+          });
+          checkWinCondition();
+        };
+
+        const endRound = () => {
+          checkWinCondition();
+        };
+
+        const winnerPlayer = ref(null);
+        const checkWinCondition = () => {
+          const reached = players.value.filter(p => p.score >= targetScore.value);
+          if (reached.length > 0) {
+            reached.sort((a,b) => b.score - a.score);
+            winnerPlayer.value = reached[0];
+            currentStatus.value = 'WINNER';
+            playSound('win');
+            if (window.confetti) window.confetti({ particleCount: 300, spread: 120 });
+            broadcastState();
+            return;
+          }
+
+          // 新的一輪重置手牌
+          roundNumber.value++;
+          players.value.forEach(p => {
+            p.hand = [];
+            p.hasShield = false;
+            p.status = 'active';
+          });
+          currentPlayerIdx.value = 0;
+          broadcastState();
+        };
+
+        const resetToLobby = () => {
+          currentStatus.value = 'LOBBY';
+          renderQR();
+          broadcastState();
+        };
+
+        // 組別新增與移除 (上限 8 組)
+        const addPlayer = () => {
+          const n = newPlayerName.value.trim();
+          if (!n) return;
+          if (players.value.length >= 8) {
+            alert("⚠️ 房間已達到上限 8 組！");
+            return;
+          }
+          const emojis = ["🐯", "🐉", "🦅", "🦁", "🦊", "⚡", "🚀", "👑"];
+          players.value.push({
+            id: `p_${Date.now()}`,
+            name: n,
+            avatar: emojis[players.value.length % emojis.length],
+            score: 0,
+            hand: [],
+            hasShield: false,
+            status: "active",
+            isRemote: false
+          });
+          newPlayerName.value = "";
+          broadcastState();
+        };
+
+        const removePlayer = (idx) => {
+          if (players.value.length <= 2) {
+            alert("最少需要保留 2 組！");
+            return;
+          }
+          players.value.splice(idx, 1);
+          broadcastState();
+        };
+
+        // ----------------------------------------------------
+        // 9. 立體聲 Web Audio API 程式化合成音效
+        // ----------------------------------------------------
+        let audioCtx = null;
+        const audioUnlocked = ref(false);
+
+        const ensureAudioUnlocked = () => {
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          audioUnlocked.value = true;
+        };
+
+        const unlockAudioManual = () => {
+          ensureAudioUnlocked();
+        };
+
+        const toggleMute = () => {
+          isMuted.value = !isMuted.value;
+        };
+
+        const playSound = (type) => {
+          if (isMuted.value) return;
+          ensureAudioUnlocked();
+          if (!audioCtx) return;
+          const now = audioCtx.currentTime;
+
+          try {
+            if (type === 'deal') {
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(320, now);
+              osc.frequency.exponentialRampToValueAtTime(880, now + 0.07);
+              gain.gain.setValueAtTime(0.18, now);
+              gain.gain.linearRampToValueAtTime(0.01, now + 0.07);
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.start(now);
+              osc.stop(now + 0.07);
+            } else if (type === 'safe') {
+              [523.25, 659.25].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(f, now + i * 0.05);
+                gain.gain.setValueAtTime(0.16, now + i * 0.05);
+                gain.gain.linearRampToValueAtTime(0.01, now + i * 0.05 + 0.18);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + i * 0.05);
+                osc.stop(now + i * 0.05 + 0.18);
+              });
+            } else if (type === 'bust') {
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(240, now);
+              osc.frequency.linearRampToValueAtTime(60, now + 0.4);
+              gain.gain.setValueAtTime(0.35, now);
+              gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.start(now);
+              osc.stop(now + 0.4);
+            } else if (type === 'shield') {
+              [440, 554.37, 659.25].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(f, now + i * 0.06);
+                gain.gain.setValueAtTime(0.2, now + i * 0.06);
+                gain.gain.linearRampToValueAtTime(0.01, now + i * 0.06 + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + i * 0.06);
+                osc.stop(now + i * 0.06 + 0.3);
+              });
+            } else if (type === 'stay') {
+              [392, 493.88, 587.33].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(f, now + i * 0.08);
+                gain.gain.setValueAtTime(0.18, now + i * 0.08);
+                gain.gain.linearRampToValueAtTime(0.01, now + i * 0.08 + 0.22);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + i * 0.08);
+                osc.stop(now + i * 0.08 + 0.22);
+              });
+            } else if (type === 'flip7' || type === 'win') {
+              [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(f, now + i * 0.1);
+                gain.gain.setValueAtTime(0.25, now + i * 0.1);
+                gain.gain.linearRampToValueAtTime(0.01, now + i * 0.1 + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + i * 0.1);
+                osc.stop(now + i * 0.1 + 0.4);
+              });
+            }
+          } catch(e) {}
+        };
+
+        // ----------------------------------------------------
+        // 10. 樣式色彩計算
+        // ----------------------------------------------------
+        const getCardStyleClass = (card) => {
+          if (!card) return '';
+          if (card.type === CARD_TYPES.NUMBER) {
+            const colors = {
+              0: 'border-slate-500 text-slate-200 bg-slate-900 shadow-slate-900/60',
+              1: 'border-cyan-400 text-cyan-200 bg-cyan-950/80 shadow-cyan-900/50',
+              2: 'border-emerald-400 text-emerald-200 bg-emerald-950/80 shadow-emerald-900/50',
+              3: 'border-lime-400 text-lime-200 bg-lime-950/80 shadow-lime-900/50',
+              4: 'border-amber-400 text-amber-200 bg-amber-950/80 shadow-amber-900/50',
+              5: 'border-orange-400 text-orange-200 bg-orange-950/80 shadow-orange-900/50',
+              6: 'border-rose-400 text-rose-200 bg-rose-950/80 shadow-rose-900/50',
+              7: 'border-yellow-300 text-yellow-100 bg-amber-950/90 shadow-yellow-500/60 ring-2 ring-yellow-400/50',
+              8: 'border-fuchsia-400 text-fuchsia-200 bg-fuchsia-950/80 shadow-fuchsia-900/50',
+              9: 'border-purple-400 text-purple-200 bg-purple-950/80 shadow-purple-900/50',
+              10: 'border-blue-400 text-blue-200 bg-blue-950/80 shadow-blue-900/50',
+              11: 'border-indigo-400 text-indigo-200 bg-indigo-950/80 shadow-indigo-900/50',
+              12: 'border-red-400 text-red-200 bg-red-950/90 shadow-red-900/60'
+            };
+            return colors[card.value] || 'border-slate-600 text-white bg-slate-900';
+          } else if (card.type === CARD_TYPES.SECOND_CHANCE) {
+            return 'border-emerald-400 text-emerald-200 bg-emerald-950/90 ring-1 ring-emerald-500/50';
+          } else if (card.type === CARD_TYPES.FLIP_THREE) {
+            return 'border-amber-500 text-amber-200 bg-amber-950/90 ring-1 ring-amber-500/50';
+          } else if (card.type === CARD_TYPES.FREEZE) {
+            return 'border-sky-400 text-sky-200 bg-sky-950/90 ring-1 ring-sky-500/50';
+          } else if (card.type === CARD_TYPES.WILD) {
+            return 'border-yellow-300 text-yellow-100 bg-purple-950/90 ring-2 ring-yellow-400/50';
+          } else {
+            return 'border-pink-400 text-pink-200 bg-pink-950/90';
+          }
+        };
+
+        const getScoreChipClass = (p, idx) => {
+          if (idx === currentPlayerIdx.value) return 'border-amber-500 bg-amber-950/50 shadow-lg ring-1 ring-amber-500/40';
+          if (p.status === 'busted') return 'border-red-900/50 bg-slate-950/60 opacity-60';
+          if (p.status === 'stayed') return 'border-emerald-800/60 bg-emerald-950/20';
+          return 'border-slate-800 bg-slate-900/80';
+        };
+
+        const getBustColor = (prob) => {
+          if (prob >= 50) return 'text-red-400';
+          if (prob >= 25) return 'text-amber-400';
+          return 'text-emerald-400';
+        };
+
+        const getBustRiskLabel = (prob) => {
+          if (prob >= 50) return '高危險！爆牌機率已過半，請謹慎考量！';
+          if (prob >= 25) return '中度風險，考驗勇氣與戰略博弈！';
+          return '極低風險，放膽翻牌向前衝！';
+        };
+
+        const getBustBarColor = (prob) => {
+          if (prob >= 50) return 'bg-red-500';
+          if (prob >= 25) return 'bg-amber-500';
+          return 'bg-emerald-500';
+        };
+
+        const setMode = (m) => { viewMode.value = m; };
+        const openModal = (id) => { activeModal.value = id; };
+        const closeModal = () => { activeModal.value = null; };
+
+        // 快捷鍵監聽 (空白鍵翻牌、S 鍵停手)
+        const handleKeyDown = (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+          if (currentStatus.value !== 'PLAYING') return;
+          if (e.code === 'Space') {
+            e.preventDefault();
+            handleFlip();
+          } else if (e.code === 'KeyS') {
+            e.preventDefault();
+            handleStay();
+          }
+        };
+
+        onMounted(() => {
+          window.addEventListener('keydown', handleKeyDown);
+
+          // 若直接帶有房號參數，預載入
+          if (scannedRoomTarget.value) {
+            inputJoinRoomCode.value = scannedRoomTarget.value;
+          }
+        });
+
+        onUnmounted(() => {
+          window.removeEventListener('keydown', handleKeyDown);
+          if (peer) peer.destroy();
+        });
+
+        return {
+          viewState,
+          portalTab,
+          hostDeviceRole,
+          scannedRoomTarget,
+          targetRoomCode,
+          inputJoinRoomCode,
+          customCreateRoomCode,
+          recentRooms,
+          roomCode,
+          showBigQrModal,
+          joinUrl,
+          copyJoinUrl,
+          prepareJoinRoom,
+          startJoinFlow,
+          confirmJoinAsMobile,
+          createNewRoomHost,
+          startLocalDemoMode,
+          confirmLeaveHostToPortal,
+          mobileInputName,
+          selectedAvatar,
+          avatarOptions,
+          isConnectingPeer,
+          currentStatus,
+          viewMode,
+          targetScore,
+          roundNumber,
+          currentPlayerIdx,
+          isProcessing,
+          isShaking,
+          isMuted,
+          activeModal,
+          openModal,
+          closeModal,
+          players,
+          newPlayerName,
+          deck,
+          activePlayer,
+          activePlayerDistinctCount,
+          activePlayerRoundScore,
+          activePlayerBustData,
+          rankedPlayers,
+          myMobilePlayer,
+          myMobilePlayerInfo,
+          myMobileHand,
+          myMobileDistinctCount,
+          myMobileRoundScore,
+          isMyTurn,
+          mobileGameState,
+          mobileActionFlip,
+          mobileActionStay,
+          sendReaction,
+          activeReactions,
+          p2pStatus,
+          p2pStatusText,
+          connectedClientsCount,
+          startGame,
+          handleFlip,
+          handleStay,
+          resetToLobby,
+          addPlayer,
+          removePlayer,
+          audioUnlocked,
+          unlockAudioManual,
+          ensureAudioUnlocked,
+          toggleMute,
+          playSound,
+          setMode,
+          getDistinctCount,
+          calculateScore,
+          getCardStyleClass,
+          getScoreChipClass,
+          getBustColor,
+          getBustRiskLabel,
+          getBustBarColor
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
